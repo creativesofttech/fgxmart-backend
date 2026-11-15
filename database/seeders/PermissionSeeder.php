@@ -30,6 +30,7 @@ class PermissionSeeder extends Seeder
             'Reports',
             'Permissions',
             'Countries',
+            'Zipcodes',
             'Brands',
             'Bank Accounts',
             'Company Settings',

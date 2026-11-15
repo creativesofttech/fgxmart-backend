@@ -38,6 +38,7 @@ Route::prefix('v1')->group(function () {
                     Route::apiResource('brands', \App\Http\Controllers\Api\V1\Admin\BrandController::class);
                     Route::apiResource('attributes', \App\Http\Controllers\Api\V1\Admin\AttributeController::class);
                     Route::apiResource('countries', \App\Http\Controllers\Api\V1\Admin\CountryController::class);
+                    Route::apiResource('zipcodes', \App\Http\Controllers\Api\V1\Admin\ZipcodeController::class)->except('show');
                     Route::get('products/generate-sku', [\App\Http\Controllers\Api\V1\Admin\ProductController::class , 'generateSku']);
                     Route::apiResource('products', \App\Http\Controllers\Api\V1\Admin\ProductController::class);
                     

@@ -18,6 +18,36 @@ beforeEach(function () {
     $this->withToken($token);
 });
 
+it('stores optional HSN codes and dependent category selections without changing legacy assignments', function () {
+    $root = Category::create(['name' => 'Food', 'slug' => 'food']);
+    $child = Category::create(['name' => 'Snacks', 'slug' => 'snacks', 'parent_id' => $root->id]);
+    $payload = ['name' => 'Snack', 'base_price' => 10, 'stock_quantity' => 2, 'main_category_id' => $root->id, 'sub_category_id' => $child->id, 'hsn_code' => '001234'];
+    $created = $this->postJson('/api/v1/admin/products', $payload)->assertCreated()
+        ->assertJsonPath('data.category_id', $child->id)->assertJsonPath('data.hsn_code', '001234')->json('data');
+    $this->getJson('/api/v1/admin/products/'.$created['id'])->assertOk()->assertJsonPath('data.hsn_code', '001234');
+    $this->putJson('/api/v1/admin/products/'.$created['id'], array_merge($payload, ['sub_category_id' => null, 'hsn_code' => null]))
+        ->assertOk()->assertJsonPath('data.category_id', $root->id)->assertJsonPath('data.hsn_code', null);
+    unset($payload['main_category_id'], $payload['sub_category_id'], $payload['hsn_code']);
+    $this->postJson('/api/v1/admin/products', array_merge($payload, ['category_id' => $child->id]))
+        ->assertCreated()->assertJsonPath('data.category_id', $child->id)->assertJsonPath('data.hsn_code', null);
+});
+
+it('rejects mismatched category levels and invalid HSN codes before storing products', function () {
+    $root = Category::create(['name' => 'Food', 'slug' => 'food']);
+    $other = Category::create(['name' => 'Clothing', 'slug' => 'clothing']);
+    $child = Category::create(['name' => 'Shirts', 'slug' => 'shirts', 'parent_id' => $other->id]);
+    $payload = ['name' => 'Product', 'base_price' => 10, 'stock_quantity' => 2];
+    $this->postJson('/api/v1/admin/products', $payload + ['main_category_id' => $root->id, 'sub_category_id' => $child->id])
+        ->assertUnprocessable()->assertJsonValidationErrors('sub_category_id');
+    $this->postJson('/api/v1/admin/products', $payload + ['main_category_id' => $child->id])
+        ->assertUnprocessable()->assertJsonValidationErrors('main_category_id');
+    $this->postJson('/api/v1/admin/products', $payload + ['sub_category_id' => $child->id])
+        ->assertUnprocessable()->assertJsonValidationErrors('main_category_id');
+    $this->postJson('/api/v1/admin/products', $payload + ['hsn_code' => str_repeat('1', 21)])
+        ->assertUnprocessable()->assertJsonValidationErrors('hsn_code');
+    expect(Product::count())->toBe(0);
+});
+
 it('creates main categories and subcategories with descriptions and images', function () {
     Storage::fake('public');
     $root = $this->postJson('/api/v1/admin/categories', ['name' => 'Clothing', 'short_description' => 'Everyday style', 'code' => 'clt'])->assertCreated()->json('data');
@@ -76,4 +106,22 @@ it('retires hero slider routes and schema', function () {
     expect(\Illuminate\Support\Facades\Schema::hasTable('hero_slides'))->toBeFalse();
     $this->getJson('/api/v1/hero-slides')->assertNotFound();
     $this->getJson('/api/v1/admin/hero-slides')->assertNotFound();
+});
+
+it('filters multiple main and child categories together while preserving collection flags', function () {
+    $root = Category::create(['name' => 'Food', 'slug' => 'filter-food', 'status' => true]);
+    $child = Category::create(['name' => 'Snacks', 'slug' => 'filter-snacks', 'parent_id' => $root->id, 'status' => true]);
+    $other = Category::create(['name' => 'Clothing', 'slug' => 'filter-clothing', 'status' => true]);
+    $hidden = Category::create(['name' => 'Hidden', 'slug' => 'filter-hidden', 'parent_id' => $root->id, 'status' => false]);
+    foreach ([$root, $child, $other, $hidden] as $category) {
+        Product::create(['name' => $category->name, 'slug' => 'filter-'.$category->id, 'sku' => 'FILTER-'.$category->id, 'category_id' => $category->id, 'base_price' => 10, 'is_hot_deal' => true, 'status' => true]);
+    }
+    $this->getJson('/api/v1/products?'.http_build_query(['category_ids' => [$root->id]]))->assertOk()->assertJsonCount(2, 'data');
+    $this->getJson('/api/v1/products?'.http_build_query(['category_ids' => [$child->id, $other->id], 'is_hot_deal' => 1]))->assertOk()->assertJsonCount(2, 'data');
+    $this->getJson('/api/v1/products?'.http_build_query(['category_ids' => [$hidden->id]]))->assertOk()->assertJsonCount(0, 'data');
+    $this->getJson('/api/v1/products?'.http_build_query(['category_ids' => [$child->id], 'is_hot_deal' => 0]))->assertOk()->assertJsonCount(0, 'data');
+    $this->getJson('/api/v1/products?category_ids=bad')->assertUnprocessable();
+    $this->getJson('/api/v1/products?category_ids[]=99999')->assertUnprocessable();
+    $root->update(['status' => false]);
+    $this->getJson('/api/v1/products?'.http_build_query(['category_ids' => [$child->id]]))->assertOk()->assertJsonCount(0, 'data');
 });

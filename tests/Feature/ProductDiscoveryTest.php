@@ -42,3 +42,29 @@ it('returns only active products with a genuine discount for hot deals', functio
     $this->getJson('/api/v1/products?on_sale=0')->assertOk()->assertJsonCount(2, 'data');
     $this->getJson('/api/v1/products?on_sale=invalid')->assertUnprocessable();
 });
+
+it('filters explicit homepage flags and excludes inactive flagged products', function () {
+    foreach (['is_hot_deal', 'is_new_arrival', 'is_best_seller'] as $flag) {
+        Product::where('slug', 'featured-active')->update([$flag => true]);
+        Product::where('slug', 'featured-draft')->update([$flag => true]);
+        $this->getJson('/api/v1/products?'.$flag.'=1')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.slug', 'featured-active')->assertJsonPath('data.0.'.$flag, true);
+        $this->getJson('/api/v1/products?'.$flag.'=0')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.slug', 'regular-active');
+        $this->getJson('/api/v1/products?'.$flag.'=invalid')->assertUnprocessable();
+    }
+    // Hot Deal is an explicit editorial choice; it does not require a discount.
+    $this->getJson('/api/v1/products?is_hot_deal=1&is_best_seller=1')->assertOk()->assertJsonCount(1, 'data');
+});
+
+it('persists independent homepage switches on create and edit and preserves omitted flags', function () {
+    $admin = Admin::create(['name' => 'Admin', 'email' => 'collections@example.test', 'password' => 'test-password-123']);
+    $role = Role::create(['name' => 'Super Admin', 'slug' => 'super-admin']);
+    $admin->roles()->attach($role);
+    $this->withToken($admin->createToken('collections', ['admin'], now()->addHour())->plainTextToken);
+    $payload = ['name' => 'Collection Product', 'base_price' => 15, 'stock_quantity' => 2, 'is_hot_deal' => true, 'is_new_arrival' => false, 'is_best_seller' => true];
+    $created = $this->postJson('/api/v1/admin/products', $payload)->assertCreated()->assertJsonPath('data.is_hot_deal', true)->assertJsonPath('data.is_new_arrival', false)->assertJsonPath('data.is_best_seller', true)->json('data');
+    $this->putJson('/api/v1/admin/products/'.$created['id'], array_merge($payload, ['is_hot_deal' => false, 'is_new_arrival' => true, 'is_best_seller' => false]))
+        ->assertOk()->assertJsonPath('data.is_hot_deal', false)->assertJsonPath('data.is_new_arrival', true)->assertJsonPath('data.is_best_seller', false);
+    $this->putJson('/api/v1/admin/products/'.$created['id'], ['name' => 'Same Product', 'base_price' => 15, 'stock_quantity' => 2])
+        ->assertOk()->assertJsonPath('data.is_new_arrival', true);
+    $this->postJson('/api/v1/admin/products', array_merge($payload, ['is_hot_deal' => 'invalid']))->assertUnprocessable()->assertJsonValidationErrors('is_hot_deal');
+});

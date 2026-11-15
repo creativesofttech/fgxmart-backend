@@ -18,7 +18,7 @@ class AuthorizeAdmin
         if ($request->routeIs('admin.dashboard')) return $next($request);
 
         $module = $request->segment(4);
-        $modules = ['roles', 'permissions', 'categories', 'brands', 'attributes', 'countries', 'products', 'bank-accounts', 'company-settings', 'orders', 'faqs', 'pages', 'media'];
+        $modules = ['roles', 'permissions', 'categories', 'brands', 'attributes', 'countries', 'zipcodes', 'products', 'bank-accounts', 'company-settings', 'orders', 'faqs', 'pages', 'media'];
         abort_unless(in_array($module, $modules, true), 403, 'Unknown admin resource.');
 
         $action = match ($request->route()->getActionMethod()) {

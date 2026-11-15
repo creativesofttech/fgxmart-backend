@@ -15,6 +15,7 @@ class Product extends Model
         'name',
         'slug',
         'sku',
+        'hsn_code',
         'variation_code',
         'summary',
         'description',
@@ -23,11 +24,17 @@ class Product extends Model
         'discount_price',
         'stock_quantity',
         'status',
+        'is_hot_deal',
+        'is_new_arrival',
+        'is_best_seller',
         'is_featured'
     ];
 
     protected $casts = [
         'status' => 'boolean',
+        'is_hot_deal' => 'boolean',
+        'is_new_arrival' => 'boolean',
+        'is_best_seller' => 'boolean',
         'is_featured' => 'boolean',
         'base_price' => 'decimal:2',
         'discount_price' => 'decimal:2',

@@ -9,6 +9,7 @@ use App\Services\ImageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class ProductController extends Controller
 {
@@ -32,6 +33,13 @@ class ProductController extends Controller
             $query->where('is_featured', $request->boolean('is_featured'));
         }
 
+        foreach (['is_hot_deal', 'is_new_arrival', 'is_best_seller'] as $flag) {
+            if ($request->has($flag)) {
+                $request->validate([$flag => 'boolean']);
+                $query->where($flag, $request->boolean($flag));
+            }
+        }
+
         if ($request->has('on_sale')) {
             $request->validate(['on_sale' => 'boolean']);
             if ($request->boolean('on_sale')) {
@@ -49,7 +57,23 @@ class ProductController extends Controller
             });
         }
 
-        if ($request->has('category_id')) {
+        if ($request->has('category_ids')) {
+            $request->validate([
+                'category_ids' => 'array|min:1|max:50',
+                'category_ids.*' => 'required|integer|exists:categories,id',
+            ]);
+            $public = !$request->is('api/v1/admin/*');
+            $selected = \App\Models\Category::whereIn('id', $request->input('category_ids'));
+            if ($public) {
+                $selected->where('status', true)->where(function ($query) {
+                    $query->whereNull('parent_id')->orWhereHas('parent', fn ($parent) => $parent->where('status', true));
+                });
+            }
+            $selectedIds = $selected->pluck('id');
+            $children = \App\Models\Category::whereIn('parent_id', $selectedIds);
+            if ($public) $children->where('status', true);
+            $query->whereIn('category_id', $selectedIds->merge($children->pluck('id'))->unique());
+        } elseif ($request->has('category_id')) {
             $categoryId = $request->get('category_id');
             $children = \App\Models\Category::where('parent_id', $categoryId);
             if (!$request->is('api/v1/admin/*')) $children->where('status', true);
@@ -102,6 +126,7 @@ class ProductController extends Controller
             'brand_id' => 'nullable|exists:brands,id',
             'name' => 'required|string',
             'sku' => 'nullable|string|unique:products,sku',
+            'hsn_code' => 'nullable|string|max:20',
             'variation_code' => 'nullable|string|max:20',
             'summary' => 'nullable|string',
             'description' => 'nullable|string',
@@ -111,6 +136,9 @@ class ProductController extends Controller
             'stock_quantity' => 'integer|min:0',
             'status' => 'boolean',
             'is_featured' => 'boolean',
+            'is_hot_deal' => 'boolean',
+            'is_new_arrival' => 'boolean',
+            'is_best_seller' => 'boolean',
             'countries' => 'nullable|array',
             'countries.*' => 'exists:countries,id',
             'gallery' => 'nullable|array',
@@ -122,6 +150,8 @@ class ProductController extends Controller
             'attributes.*.stock' => 'nullable|integer|min:0',
             'attributes.*.sku' => 'nullable|string',
         ]);
+
+        $this->resolveCategorySelection($request);
 
         return DB::transaction(function () use ($request) {
             $coverPath = null;
@@ -136,6 +166,7 @@ class ProductController extends Controller
                 'name' => $request->name,
                 'slug' => Str::slug($request->name) . '-' . uniqid(),
                 'sku' => $request->sku,
+                'hsn_code' => $request->hsn_code,
                 'variation_code' => $request->variation_code,
                 'summary' => $request->summary,
                 'description' => $request->description,
@@ -145,6 +176,9 @@ class ProductController extends Controller
                 'stock_quantity' => $request->stock_quantity,
                 'status' => $request->get('status', true),
                 'is_featured' => $request->get('is_featured', false),
+                'is_hot_deal' => $request->boolean('is_hot_deal'),
+                'is_new_arrival' => $request->boolean('is_new_arrival'),
+                'is_best_seller' => $request->boolean('is_best_seller'),
             ]);
 
             if ($request->has('countries')) {
@@ -217,6 +251,7 @@ class ProductController extends Controller
             'brand_id' => 'nullable|exists:brands,id',
             'name' => 'required|string',
             'sku' => 'nullable|string|unique:products,sku,' . $product->id,
+            'hsn_code' => 'nullable|string|max:20',
             'variation_code' => 'nullable|string|max:20',
             'summary' => 'nullable|string',
             'description' => 'nullable|string',
@@ -226,6 +261,9 @@ class ProductController extends Controller
             'stock_quantity' => 'integer|min:0',
             'status' => 'boolean',
             'is_featured' => 'boolean',
+            'is_hot_deal' => 'boolean',
+            'is_new_arrival' => 'boolean',
+            'is_best_seller' => 'boolean',
             'countries' => 'nullable|array',
             'countries.*' => 'exists:countries,id',
             'attributes' => 'nullable|array',
@@ -235,6 +273,8 @@ class ProductController extends Controller
             'attributes.*.stock' => 'nullable|integer|min:0',
             'attributes.*.sku' => 'nullable|string',
         ]);
+
+        $this->resolveCategorySelection($request);
 
         return DB::transaction(function () use ($request, $product, $attributes) {
             if ($request->hasFile('cover_image')) {
@@ -249,6 +289,7 @@ class ProductController extends Controller
                 'name' => $request->name,
                 'slug' => Str::slug($request->name) . '-' . $product->id,
                 'sku' => $request->sku,
+                'hsn_code' => $request->exists('hsn_code') ? $request->hsn_code : $product->hsn_code,
                 'variation_code' => $request->variation_code,
                 'summary' => $request->summary,
                 'description' => $request->description,
@@ -257,6 +298,9 @@ class ProductController extends Controller
                 'stock_quantity' => $request->stock_quantity,
                 'status' => $request->get('status', $product->status),
                 'is_featured' => $request->get('is_featured', $product->is_featured),
+                'is_hot_deal' => $request->get('is_hot_deal', $product->is_hot_deal),
+                'is_new_arrival' => $request->get('is_new_arrival', $product->is_new_arrival),
+                'is_best_seller' => $request->get('is_best_seller', $product->is_best_seller),
             ]);
 
             if ($request->has('countries')) {
@@ -312,6 +356,20 @@ class ProductController extends Controller
                 'data' => $product->load(['category', 'media', 'countries', 'attributeValues.attribute'])
             ]);
         });
+    }
+
+    private function resolveCategorySelection(Request $request): void
+    {
+        // Keep the existing leaf assignment for catalogue filtering and legacy clients.
+        if (!$request->exists('main_category_id') && !$request->exists('sub_category_id')) {
+            return;
+        }
+
+        $request->validate([
+            'main_category_id' => ['nullable', 'integer', 'required_with:sub_category_id', Rule::exists('categories', 'id')->whereNull('parent_id')],
+            'sub_category_id' => ['nullable', 'integer', Rule::exists('categories', 'id')->where('parent_id', $request->input('main_category_id'))],
+        ]);
+        $request->merge(['category_id' => $request->input('sub_category_id') ?: $request->input('main_category_id')]);
     }
 
     public function destroy(Product $product)
