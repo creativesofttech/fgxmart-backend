@@ -22,8 +22,11 @@ class OrderPlacedMail extends Mailable
     public function __construct(Order $order)
     {
         $this->order = $order;
-        // Pointing to the frontend success page (assuming 3002 based on user environment)
-        $this->successUrl = "http://localhost:3002/order-success?id=" . $order->order_number . "&hash=" . $order->view_hash . "&download=1";
+        $this->successUrl = rtrim(config('app.frontend_url'), '/') . '/order-success?' . http_build_query([
+            'id' => $order->order_number,
+            'hash' => $order->view_hash,
+            'download' => 1,
+        ]);
     }
 
     /**

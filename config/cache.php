@@ -17,6 +17,9 @@ return [
 
     'default' => env('CACHE_STORE', 'database'),
 
+    // Cached data in this application uses scalar/array values, not PHP objects.
+    'serializable_classes' => false,
+
     /*
     |--------------------------------------------------------------------------
     | Cache Stores

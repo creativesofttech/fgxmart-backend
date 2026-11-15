@@ -23,6 +23,24 @@ class ProductController extends Controller
     {
         $query = Product::with(['category', 'brand', 'media', 'countries', 'attributeValues.attribute'])->orderBy('created_at', 'desc');
 
+        if (!$request->is('api/v1/admin/*')) {
+            $query->where('status', true);
+        }
+
+        if ($request->has('is_featured')) {
+            $request->validate(['is_featured' => 'boolean']);
+            $query->where('is_featured', $request->boolean('is_featured'));
+        }
+
+        if ($request->has('on_sale')) {
+            $request->validate(['on_sale' => 'boolean']);
+            if ($request->boolean('on_sale')) {
+                $query->whereNotNull('discount_price')
+                    ->where('discount_price', '>=', 0)
+                    ->whereColumn('discount_price', '<', 'base_price');
+            }
+        }
+
         if ($request->has('search')) {
             $search = $request->get('search');
             $query->where(function ($q) use ($search) {
@@ -32,7 +50,10 @@ class ProductController extends Controller
         }
 
         if ($request->has('category_id')) {
-            $query->where('category_id', $request->get('category_id'));
+            $categoryId = $request->get('category_id');
+            $children = \App\Models\Category::where('parent_id', $categoryId);
+            if (!$request->is('api/v1/admin/*')) $children->where('status', true);
+            $query->whereIn('category_id', $children->pluck('id')->push($categoryId));
         }
 
         if ($request->has('min_price')) {

@@ -31,7 +31,7 @@ class OrderController extends Controller
             return response()->json(['message' => 'Cart is empty'], 400);
         }
 
-        $address = UserAddress::with('country')->findOrFail($request->address_id);
+        $address = $user->addresses()->with('country')->findOrFail($request->address_id);
         $primaryBank = BankAccount::where('is_primary', true)->first();
 
         // Calculate totals on server-side
@@ -177,8 +177,8 @@ class OrderController extends Controller
         $order = Order::where('order_number', $orderNumber)->firstOrFail();
         
         $request->validate([
-            'status' => 'nullable|string',
-            'payment_status' => 'nullable|string',
+            'status' => 'sometimes|required|in:pending,confirmed,processing,shipped,delivered,cancelled',
+            'payment_status' => 'sometimes|required|in:unpaid,paid,refunded',
             'notes' => 'nullable|string',
         ]);
 
@@ -189,7 +189,7 @@ class OrderController extends Controller
             if ($request->has('status') && $request->status !== $order->status) {
                 OrderStatusLog::create([
                     'order_id' => $order->id,
-                    'user_id' => $user->id,
+                    'admin_id' => $user->id,
                     'type' => 'order_status',
                     'old_status' => $order->status,
                     'new_status' => $request->status,
@@ -202,7 +202,7 @@ class OrderController extends Controller
             if ($request->has('payment_status') && $request->payment_status !== $order->payment_status) {
                 OrderStatusLog::create([
                     'order_id' => $order->id,
-                    'user_id' => $user->id,
+                    'admin_id' => $user->id,
                     'type' => 'payment_status',
                     'old_status' => $order->payment_status,
                     'new_status' => $request->payment_status,

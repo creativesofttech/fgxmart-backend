@@ -25,4 +25,26 @@ class AdminAuthController extends Controller
             'data' => $data,
         ]);
     }
+
+    public function user(Request $request)
+    {
+        $admin = $request->user();
+
+        return response()->json([
+            'data' => [
+                'id' => $admin->id,
+                'name' => $admin->name,
+                'email' => $admin->email,
+                'roles' => $admin->roles->pluck('slug')->values(),
+                'permissions' => $admin->permissions()->pluck('slug')->values(),
+            ],
+        ]);
+    }
+
+    public function logout(Request $request)
+    {
+        $request->user()->currentAccessToken()->delete();
+
+        return response()->json(['message' => 'Logged out']);
+    }
 }

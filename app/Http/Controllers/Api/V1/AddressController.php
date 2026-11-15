@@ -17,7 +17,7 @@ class AddressController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
             'phone_number' => 'required|string|max:20',
@@ -31,7 +31,7 @@ class AddressController extends Controller
             'is_default' => 'boolean'
         ]);
 
-        return DB::transaction(function () use ($request) {
+        return DB::transaction(function () use ($request, $validated) {
             $user = $request->user();
 
             if ($request->is_default) {
@@ -42,7 +42,7 @@ class AddressController extends Controller
             $isDefault = $request->is_default ?: ($user->addresses()->count() === 0);
 
             $address = $user->addresses()->create(array_merge(
-                $request->all(),
+                $validated,
             ['is_default' => $isDefault]
             ));
 
@@ -57,7 +57,7 @@ class AddressController extends Controller
     {
         $this->authorizeAddress($request->user(), $address);
 
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
             'phone_number' => 'required|string|max:20',
@@ -71,14 +71,14 @@ class AddressController extends Controller
             'is_default' => 'boolean'
         ]);
 
-        return DB::transaction(function () use ($request, $address) {
+        return DB::transaction(function () use ($request, $address, $validated) {
             if ($request->is_default && !$address->is_default) {
                 UserAddress::where('user_id', $request->user()->id)
                     ->where('id', '!=', $address->id)
                     ->update(['is_default' => false]);
             }
 
-            $address->update($request->all());
+            $address->update($validated);
 
             return response()->json([
                 'message' => 'Address updated successfully',

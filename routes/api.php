@@ -16,7 +16,6 @@ Route::prefix('v1')->group(function () {
     Route::get('/categories/{slug}', [\App\Http\Controllers\Api\V1\Admin\CategoryController::class , 'showBySlug']);
     Route::get('/products', [\App\Http\Controllers\Api\V1\Admin\ProductController::class , 'index']);
     Route::get('/products/{product}', [\App\Http\Controllers\Api\V1\Admin\ProductController::class , 'showBySlug']);
-    Route::get('/hero-slides', [\App\Http\Controllers\Api\V1\HeroSlideController::class , 'index']);
     Route::get('/company-info', [\App\Http\Controllers\Api\V1\CompanyInfoController::class , 'index']);
     Route::get('/faqs', [\App\Http\Controllers\Api\V1\FaqController::class, 'index']);
     Route::get('/pages', [\App\Http\Controllers\Api\V1\Admin\PageController::class , 'index']);
@@ -26,10 +25,13 @@ Route::prefix('v1')->group(function () {
     // Admin Routes
     Route::prefix('admin')->group(function () {
             // Public Admin Routes
-            Route::post('/secure-admin-fgx', [AdminAuthController::class , 'login']);
+            Route::post('/secure-admin-fgx', [AdminAuthController::class , 'login'])->middleware('throttle:5,1');
 
             // Protected Admin Routes
-            Route::middleware('auth:sanctum')->group(function () {
+            Route::middleware(['auth:sanctum', 'admin', 'admin.permission'])->group(function () {
+                    Route::get('/user', [AdminAuthController::class, 'user'])->name('admin.user');
+                    Route::post('/logout', [AdminAuthController::class, 'logout'])->name('admin.logout');
+                    Route::get('/dashboard', [\App\Http\Controllers\Api\V1\Admin\DashboardController::class, 'index'])->name('admin.dashboard');
                     Route::apiResource('roles', \App\Http\Controllers\Api\V1\Admin\RoleController::class);
                     Route::apiResource('permissions', \App\Http\Controllers\Api\V1\Admin\PermissionController::class);
                     Route::apiResource('categories', \App\Http\Controllers\Api\V1\Admin\CategoryController::class);
@@ -39,8 +41,6 @@ Route::prefix('v1')->group(function () {
                     Route::get('products/generate-sku', [\App\Http\Controllers\Api\V1\Admin\ProductController::class , 'generateSku']);
                     Route::apiResource('products', \App\Http\Controllers\Api\V1\Admin\ProductController::class);
                     
-                    Route::get('/hero-slides', [\App\Http\Controllers\Api\V1\HeroSlideController::class , 'adminIndex']);
-                    Route::apiResource('hero-slides', \App\Http\Controllers\Api\V1\HeroSlideController::class)->except(['index']);
 
                     Route::apiResource('bank-accounts', \App\Http\Controllers\Api\V1\Admin\BankAccountController::class);
 
@@ -59,7 +59,7 @@ Route::prefix('v1')->group(function () {
             });
 
             // Protected User/Shared Routes
-            Route::middleware('auth:sanctum')->group(function () {
+            Route::middleware(['auth:sanctum', 'customer'])->group(function () {
             Route::get('/user', function (Request $request) {
                     return $request->user();
                 }

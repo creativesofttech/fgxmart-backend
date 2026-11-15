@@ -29,7 +29,13 @@ class PermissionSeeder extends Seeder
             'Support Tickets',
             'Reports',
             'Permissions',
-            'Countries'
+            'Countries',
+            'Brands',
+            'Bank Accounts',
+            'Company Settings',
+            'FAQs',
+            'Pages',
+            'Media',
         ];
 
         $actions = [

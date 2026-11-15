@@ -6,112 +6,99 @@ use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Services\ImageService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Str;
 
 class CategoryController extends Controller
 {
-    protected $imageService;
-
-    public function __construct(ImageService $imageService)
-    {
-        $this->imageService = $imageService;
-    }
+    public function __construct(protected ImageService $imageService) {}
 
     public function index(Request $request)
     {
-        if ($request->has('all')) {
-            return response()->json([
-                'data' => Category::all()
-            ]);
-        }
+        $public = !$request->is('api/v1/admin/*');
+        $query = Category::query()->with('parent:id,name,slug')->with(['children' => function ($query) use ($public) {
+            if ($public) $query->where('status', true);
+            $query->orderBy('sorting_order')->orderBy('id');
+        }])->orderBy('sorting_order')->orderBy('id');
+        if ($public) $query->where('status', true)->where(function ($query) {
+            $query->whereNull('parent_id')->orWhereHas('parent', fn ($parent) => $parent->where('status', true));
+        });
+        if ($request->boolean('roots')) $query->whereNull('parent_id');
+        if ($request->has('all')) return response()->json(['data' => $query->get()]);
+        return response()->json($query->paginate(min(max((int) $request->get('per_page', 10), 1), 100)));
+    }
 
-        return response()->json(
-            Category::orderBy('sorting_order', 'asc')->paginate($request->get('per_page', 10))
-        );
+    private function validated(Request $request, ?Category $category = null): array
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255', Rule::unique('categories', 'name')->ignore($category?->id)],
+            'code' => 'nullable|string|max:10',
+            'short_description' => 'nullable|string|max:255',
+            'parent_id' => ['nullable', 'integer', Rule::exists('categories', 'id')],
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp,avif|max:5120',
+            'remove_image' => 'nullable|boolean',
+            'sorting_order' => 'nullable|integer|min:0',
+            'status' => 'nullable|boolean',
+        ]);
+        $parentId = $data['parent_id'] ?? null;
+        if ($parentId) {
+            $parent = Category::findOrFail($parentId);
+            if ($parent->parent_id || ($category && ($parent->id === $category->id || $category->children()->exists()))) {
+                throw ValidationException::withMessages(['parent_id' => 'Choose a main category. A category with subcategories cannot become a subcategory.']);
+            }
+        }
+        $slug = Str::slug($data['name']);
+        if (!$slug || Category::where('slug', $slug)->when($category, fn ($q) => $q->where('id', '!=', $category->id))->exists()) {
+            throw ValidationException::withMessages(['name' => 'This name produces an empty or already-used URL. Choose a different name.']);
+        }
+        $data['slug'] = $slug;
+        $data['code'] = strtoupper($data['code'] ?? '');
+        $data['parent_id'] = $parentId;
+        unset($data['image'], $data['remove_image']);
+        return $data;
     }
 
     public function store(Request $request)
     {
-        $request->validate([
-            'name' => 'required|string|unique:categories,name',
-            'code' => 'nullable|string|max:10',
-            'image' => 'nullable|mimes:jpeg,png,jpg,gif,svg,webp,avif|max:5120',
-            'sorting_order' => 'nullable|integer',
-            'status' => 'nullable|boolean',
-        ]);
-
-        $imagePath = null;
-        if ($request->hasFile('image')) {
-            $upload = $this->imageService->upload($request->file('image'), 'categories');
-            $imagePath = $upload['path'];
-        }
-
-        $category = Category::create([
-            'name' => $request->name,
-            'code' => strtoupper($request->code),
-            'slug' => Str::slug($request->name),
-            'image' => $imagePath,
-            'sorting_order' => $request->get('sorting_order', 0),
-            'status' => $request->get('status', true),
-        ]);
-
-        return response()->json([
-            'message' => 'Category created successfully',
-            'data' => $category
-        ], 201);
+        $data = $this->validated($request);
+        if ($request->hasFile('image')) $data['image'] = $this->imageService->upload($request->file('image'), 'categories')['path'];
+        $category = Category::create($data);
+        return response()->json(['message' => 'Category created successfully', 'data' => $category->load('parent', 'children')], 201);
     }
 
     public function show(Category $category)
     {
-        return response()->json([
-            'data' => $category
-        ]);
+        return response()->json(['data' => $category->load('parent', 'children')]);
     }
 
     public function showBySlug($slug)
     {
-        $category = Category::where('slug', $slug)->firstOrFail();
-        return response()->json([
-            'data' => $category
-        ]);
+        $category = Category::where('slug', $slug)->where('status', true)
+            ->where(fn ($query) => $query->whereNull('parent_id')->orWhereHas('parent', fn ($parent) => $parent->where('status', true)))
+            ->with(['children' => fn ($query) => $query->where('status', true)->orderBy('sorting_order')])->firstOrFail();
+        return response()->json(['data' => $category]);
     }
 
     public function update(Request $request, Category $category)
     {
-        $request->validate([
-            'name' => 'required|string|unique:categories,name,' . $category->id,
-            'code' => 'nullable|string|max:10',
-            'image' => 'nullable|mimes:jpeg,png,jpg,gif,svg,webp,avif|max:5120',
-            'sorting_order' => 'nullable|integer',
-            'status' => 'nullable|boolean',
-        ]);
-
-        if ($request->hasFile('image')) {
-            $this->imageService->delete($category->image);
-            $upload = $this->imageService->upload($request->file('image'), 'categories');
-            $category->image = $upload['path'];
-        }
-
-        $category->name = $request->name;
-        $category->code = strtoupper($request->code);
-        $category->slug = Str::slug($request->name);
-        $category->sorting_order = $request->get('sorting_order', $category->sorting_order);
-        $category->status = $request->get('status', $category->status);
-        $category->save();
-
-        return response()->json([
-            'message' => 'Category updated successfully',
-            'data' => $category
-        ]);
+        $data = $this->validated($request, $category);
+        $oldImage = $category->image;
+        if ($request->hasFile('image')) $data['image'] = $this->imageService->upload($request->file('image'), 'categories')['path'];
+        elseif ($request->boolean('remove_image')) $data['image'] = null;
+        $category->update($data);
+        if (array_key_exists('image', $data) && $oldImage !== $category->image) $this->imageService->delete($oldImage);
+        return response()->json(['message' => 'Category updated successfully', 'data' => $category->load('parent', 'children')]);
     }
 
     public function destroy(Category $category)
     {
-        $this->imageService->delete($category->image);
+        if ($category->children()->exists() || $category->products()->exists()) {
+            throw ValidationException::withMessages(['category' => 'Move or delete the assigned products and subcategories before deleting this category.']);
+        }
+        $image = $category->image;
         $category->delete();
-
-        return response()->json([
-            'message' => 'Category deleted successfully'
-        ]);
+        $this->imageService->delete($image);
+        return response()->json(['message' => 'Category deleted successfully']);
     }
 }

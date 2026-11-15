@@ -23,7 +23,7 @@ class AuthService
         }
 
         return [
-            'token' => $admin->createToken('admin-token')->plainTextToken,
+            'token' => $admin->createToken('admin-token', ['admin'], now()->addHours(8))->plainTextToken,
             'admin' => $admin,
         ];
     }

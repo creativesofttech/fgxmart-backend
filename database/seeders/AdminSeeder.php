@@ -14,11 +14,21 @@ class AdminSeeder extends Seeder
      */
     public function run(): void
     {
+        $email = env('ADMIN_EMAIL');
+        $password = env('ADMIN_PASSWORD');
+        if (!$email || !$password) {
+            $this->command?->warn('Admin creation skipped: set ADMIN_EMAIL and ADMIN_PASSWORD to provision an administrator.');
+            return;
+        }
+        if (strlen($password) < 12) {
+            throw new \InvalidArgumentException('ADMIN_PASSWORD must have at least 12 characters.');
+        }
+
         $admin = Admin::firstOrCreate(
-        ['email' => 'rukhumuddin.md@gmail.com'],
+        ['email' => $email],
         [
-            'name' => 'Rukhumuddin',
-            'password' => 'Password@123',
+            'name' => env('ADMIN_NAME', 'Administrator'),
+            'password' => $password,
         ]
         );
 

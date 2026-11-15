@@ -8,7 +8,7 @@ class OrderStatusLog extends Model
 {
     protected $fillable = [
         'order_id',
-        'user_id',
+        'admin_id',
         'type',
         'old_status',
         'new_status',
@@ -22,6 +22,6 @@ class OrderStatusLog extends Model
 
     public function user()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Admin::class, 'admin_id');
     }
 }
