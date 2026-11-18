@@ -19,14 +19,18 @@ class BrandController extends Controller
 
     public function index(Request $request)
     {
+        $query = Brand::query()->orderBy('name')->orderBy('id');
+        if (!$request->is('api/v1/admin/*')) {
+            $query->where('status', true);
+        }
         if ($request->has('all')) {
             return response()->json([
-                'data' => Brand::all()
+                'data' => $query->get()
             ]);
         }
 
         return response()->json(
-            Brand::orderBy('name', 'asc')->paginate($request->get('per_page', 10))
+            $query->paginate($request->get('per_page', 10))
         );
     }
 

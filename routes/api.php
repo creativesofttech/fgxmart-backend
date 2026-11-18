@@ -11,6 +11,7 @@ Route::prefix('v1')->group(function () {
     Route::post('/register', [AuthController::class , 'register'])->middleware('throttle:5,1');
 
     // Public Data Routes
+    Route::get('/brands', [\App\Http\Controllers\Api\V1\Admin\BrandController::class, 'index']);
     Route::get('/legal-pages/{page}', [\App\Http\Controllers\Api\V1\LegalPageController::class, 'show']);
     Route::get('/countries', [\App\Http\Controllers\Api\V1\Admin\CountryController::class , 'index']);
     Route::get('/countries/{country}/zipcodes', [\App\Http\Controllers\Api\V1\Admin\CountryController::class, 'zipcodes']);
