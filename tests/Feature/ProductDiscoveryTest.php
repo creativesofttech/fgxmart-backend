@@ -68,3 +68,13 @@ it('persists independent homepage switches on create and edit and preserves omit
         ->assertOk()->assertJsonPath('data.is_new_arrival', true);
     $this->postJson('/api/v1/admin/products', array_merge($payload, ['is_hot_deal' => 'invalid']))->assertUnprocessable()->assertJsonValidationErrors('is_hot_deal');
 });
+
+it('includes the main category in product details for subcategory breadcrumbs', function () {
+    $parent = \App\Models\Category::create(['name' => 'Packed Food', 'slug' => 'packed-food', 'status' => true]);
+    $child = \App\Models\Category::create(['name' => 'Pulses', 'slug' => 'pulses', 'parent_id' => $parent->id, 'status' => true]);
+    $product = Product::where('slug', 'regular-active')->first();
+    $product->update(['category_id' => $child->id]);
+    $this->getJson('/api/v1/products/regular-active')->assertOk()->assertJsonPath('data.category.name', 'Pulses')->assertJsonPath('data.category.parent.slug', 'packed-food');
+    $product->update(['category_id' => $parent->id]);
+    $this->getJson('/api/v1/products/regular-active')->assertOk()->assertJsonPath('data.category.name', 'Packed Food')->assertJsonPath('data.category.parent', null);
+});

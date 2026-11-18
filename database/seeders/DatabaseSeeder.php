@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
             CategorySeeder::class ,
             AttributeSeeder::class ,
             CountrySeeder::class ,
+            FaqSeeder::class ,
         ]);
     }
 }

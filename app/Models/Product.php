@@ -72,6 +72,11 @@ class Product extends Model
         return $this->hasMany(ProductReview::class);
     }
 
+    public function publishedReviews()
+    {
+        return $this->reviews()->where('is_approved', true)->whereHas('user');
+    }
+
     public function getCoverImageUrlAttribute()
     {
         return $this->cover_image ? asset('storage/' . $this->cover_image) : null;

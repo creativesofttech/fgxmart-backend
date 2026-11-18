@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class ProductReview extends Model
 {
+    protected $casts = ['rating' => 'float', 'is_approved' => 'boolean', 'is_verified_purchase' => 'boolean'];
     protected $fillable = [
         'user_id',
         'product_id',

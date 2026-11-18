@@ -37,6 +37,7 @@ class PermissionSeeder extends Seeder
             'FAQs',
             'Pages',
             'Media',
+            'Legal Pages',
         ];
 
         $actions = [

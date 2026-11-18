@@ -22,7 +22,8 @@ class ProductController extends Controller
 
     public function index(Request $request)
     {
-        $query = Product::with(['category', 'brand', 'media', 'countries', 'attributeValues.attribute'])->orderBy('created_at', 'desc');
+        $query = Product::with(['category', 'brand', 'media', 'countries', 'attributeValues.attribute'])
+            ->withCount('publishedReviews as reviews_count')->withAvg('publishedReviews as rating_average', 'rating')->orderBy('created_at', 'desc');
 
         if (!$request->is('api/v1/admin/*')) {
             $query->where('status', true);
@@ -226,7 +227,7 @@ class ProductController extends Controller
 
     public function showBySlug($slug)
     {
-        $product = Product::with(['category', 'brand', 'media', 'countries', 'attributeValues.attribute'])
+        $product = Product::with(['category.parent', 'brand', 'media', 'countries', 'attributeValues.attribute'])
             ->where('slug', $slug)
             ->firstOrFail();
 
