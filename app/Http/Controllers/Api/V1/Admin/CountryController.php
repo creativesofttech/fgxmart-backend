@@ -26,6 +26,14 @@ class CountryController extends Controller
         );
     }
 
+    public function zipcodes(Country $country)
+    {
+        abort_unless($country->status, 404);
+        $saved = \App\Models\Zipcode::where('country_id', $country->id)->value('zipcodes') ?? '';
+        $codes = array_values(array_unique(array_filter(array_map('trim', explode(',', $saved)), fn ($code) => $code !== '')));
+        return response()->json(['data' => $codes]);
+    }
+
     /**
      * Store a newly created resource in storage.
      */

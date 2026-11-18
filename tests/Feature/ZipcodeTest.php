@@ -63,3 +63,16 @@ it('removes zipcode lists when their country is deleted', function () {
     $country->delete();
     expect(Zipcode::count())->toBe(0);
 });
+
+it('provides only configured zipcodes for active countries without requiring admin access', function () {
+    $country = Country::create(['name' => 'India', 'code' => 'IN', 'status' => true]);
+    $other = Country::create(['name' => 'Other', 'code' => 'OT', 'status' => true]);
+    $hidden = Country::create(['name' => 'Hidden', 'code' => 'HI', 'status' => false]);
+    Zipcode::create(['country_id' => $country->id, 'zipcodes' => '00123, SW1A 1AA']);
+    Zipcode::create(['country_id' => $hidden->id, 'zipcodes' => 'SECRET']);
+    $this->getJson('/api/v1/countries/'.$country->id.'/zipcodes')->assertOk()->assertExactJson(['data' => ['00123', 'SW1A 1AA']]);
+    $this->getJson('/api/v1/countries/'.$other->id.'/zipcodes')->assertOk()->assertExactJson(['data' => []]);
+    $this->getJson('/api/v1/countries/'.$hidden->id.'/zipcodes')->assertNotFound();
+    $this->getJson('/api/v1/countries/999999/zipcodes')->assertNotFound();
+    $this->postJson('/api/v1/countries/'.$country->id.'/zipcodes', ['zipcodes' => '99999'])->assertMethodNotAllowed();
+});

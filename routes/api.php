@@ -12,6 +12,7 @@ Route::prefix('v1')->group(function () {
 
     // Public Data Routes
     Route::get('/countries', [\App\Http\Controllers\Api\V1\Admin\CountryController::class , 'index']);
+    Route::get('/countries/{country}/zipcodes', [\App\Http\Controllers\Api\V1\Admin\CountryController::class, 'zipcodes']);
     Route::get('/categories', [\App\Http\Controllers\Api\V1\Admin\CategoryController::class , 'index']);
     Route::get('/categories/{slug}', [\App\Http\Controllers\Api\V1\Admin\CategoryController::class , 'showBySlug']);
     Route::get('/products', [\App\Http\Controllers\Api\V1\Admin\ProductController::class , 'index']);
