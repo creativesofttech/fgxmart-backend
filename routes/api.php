@@ -41,6 +41,7 @@ Route::prefix('v1')->group(function () {
                     Route::apiResource('roles', \App\Http\Controllers\Api\V1\Admin\RoleController::class);
                     Route::apiResource('permissions', \App\Http\Controllers\Api\V1\Admin\PermissionController::class);
                     Route::apiResource('categories', \App\Http\Controllers\Api\V1\Admin\CategoryController::class);
+                    Route::put('brands/reorder', [\App\Http\Controllers\Api\V1\Admin\BrandController::class, 'reorder']);
                     Route::apiResource('brands', \App\Http\Controllers\Api\V1\Admin\BrandController::class);
                     Route::apiResource('attributes', \App\Http\Controllers\Api\V1\Admin\AttributeController::class);
                     Route::apiResource('countries', \App\Http\Controllers\Api\V1\Admin\CountryController::class);

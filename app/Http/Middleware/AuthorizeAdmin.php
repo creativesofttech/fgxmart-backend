@@ -24,7 +24,7 @@ class AuthorizeAdmin
         $action = match ($request->route()->getActionMethod()) {
             'index', 'show', 'adminIndex', 'adminShow' => 'index',
             'store', 'upload', 'generateSku' => 'create',
-            'update', 'updateStatus' => 'edit',
+            'update', 'updateStatus', 'reorder' => 'edit',
             'destroy' => 'destroy',
             default => null,
         };

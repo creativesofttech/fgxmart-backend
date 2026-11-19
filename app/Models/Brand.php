@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Brand extends Model
 {
-    protected $casts = ['status' => 'boolean'];
+    protected $casts = ['status' => 'boolean', 'sort_order' => 'integer'];
     protected $fillable = [
         'name',
         'slug',

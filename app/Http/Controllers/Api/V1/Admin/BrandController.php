@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Brand;
 use App\Services\ImageService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class BrandController extends Controller
@@ -19,7 +20,7 @@ class BrandController extends Controller
 
     public function index(Request $request)
     {
-        $query = Brand::query()->orderBy('name')->orderBy('id');
+        $query = Brand::query()->orderBy('sort_order')->orderBy('name')->orderBy('id');
         if (!$request->is('api/v1/admin/*')) {
             $query->where('status', true);
         }
@@ -48,12 +49,14 @@ class BrandController extends Controller
             $imagePath = $upload['path'];
         }
 
-        $brand = Brand::create([
+        $brand = new Brand([
             'name' => $request->name,
             'slug' => Str::slug($request->name),
             'brand_image' => $imagePath,
             'status' => $request->get('status', true),
         ]);
+        $brand->sort_order = (int) Brand::max('sort_order') + 1;
+        $brand->save();
 
         return response()->json([
             'message' => 'Brand created successfully',
@@ -91,6 +94,27 @@ class BrandController extends Controller
             'message' => 'Brand updated successfully',
             'data' => $brand
         ]);
+    }
+
+    public function reorder(Request $request)
+    {
+        $data = $request->validate([
+            'brand_ids' => ['required', 'array', 'min:1', 'max:10000', 'list'],
+            'brand_ids.*' => ['required', 'integer', 'distinct', 'exists:brands,id'],
+        ]);
+        $ids = array_map('intval', $data['brand_ids']);
+
+        DB::transaction(function () use ($ids) {
+            $current = Brand::orderBy('id')->lockForUpdate()->pluck('id')->all();
+            $submitted = $ids;
+            sort($submitted);
+            abort_unless($current === $submitted, 409, 'The brand list has changed. Reload it before saving the order.');
+            foreach ($ids as $position => $id) {
+                Brand::whereKey($id)->update(['sort_order' => $position + 1]);
+            }
+        });
+
+        return response()->json(['message' => 'Brand order saved successfully.']);
     }
 
     public function destroy(Brand $brand)
