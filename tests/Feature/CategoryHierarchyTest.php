@@ -86,31 +86,48 @@ it('hides inactive categories and children while including child products in par
     $this->getJson('/api/v1/categories/audio')->assertNotFound();
 });
 
-it('renames packed food to groceries in place without changing images or product and child assignments', function () {
+it('adds groceries separately while preserving packed food images and product and child assignments', function () {
+    Storage::fake('public');
     $root = Category::create(['name' => 'Packed Food', 'slug' => 'packed-food', 'image' => 'categories/uploaded.webp', 'status' => false]);
     $child = Category::create(['name' => 'Snacks', 'slug' => 'snacks', 'parent_id' => $root->id]);
     $product = Product::create(['name' => 'Snack', 'slug' => 'snack', 'sku' => 'GROC', 'category_id' => $root->id, 'base_price' => 10]);
     $this->seed(\Database\Seeders\GroceriesCategorySeeder::class);
     $this->seed(\Database\Seeders\GroceriesCategorySeeder::class);
-    expect($root->fresh()->name)->toBe('Groceries');
-    expect($root->fresh()->slug)->toBe('groceries');
-    expect($root->fresh()->short_description)->toBe('Everyday groceries, pantry staples, snacks & more');
+    expect($root->fresh()->name)->toBe('Packed Food');
+    expect($root->fresh()->slug)->toBe('packed-food');
+    expect(Category::where('slug', 'groceries')->firstOrFail()->short_description)->toBe('Everyday groceries, pantry staples, snacks & more');
     expect($root->fresh()->image)->toBe('categories/uploaded.webp');
     expect($root->fresh()->status)->toBeFalse();
     expect($child->fresh()->parent_id)->toBe($root->id);
     expect($product->fresh()->category_id)->toBe($root->id);
-    expect(Category::where('slug', 'packed-food')->exists())->toBeFalse();
+    expect(Category::where('slug', 'packed-food')->exists())->toBeTrue();
     expect(Category::where('slug', 'groceries')->count())->toBe(1);
 });
 
-it('seeds the four new roots idempotently and preserves legacy product assignments', function () {
+it('repairs the previous groceries rename without moving products or uploaded images', function () {
+    Storage::fake('public');
+    $original = Category::create(['name' => 'Groceries', 'slug' => 'groceries', 'code' => 'FOOD', 'image' => 'categories/original.webp']);
+    $child = Category::create(['name' => 'Pulses', 'slug' => 'pulses', 'parent_id' => $original->id]);
+    $this->seed(\Database\Seeders\CategorySeeder::class);
+    $this->seed(\Database\Seeders\CategorySeeder::class);
+    expect($original->fresh()->slug)->toBe('packed-food');
+    expect($original->fresh()->image)->toBe('categories/original.webp');
+    expect($child->fresh()->parent_id)->toBe($original->id);
+    $groceries = Category::where('slug', 'groceries')->firstOrFail();
+    expect($groceries->id)->not->toBe($original->id);
+    expect($groceries->code)->toBe('GROC');
+    expect($groceries->image)->toBeNull();
+    expect(Category::whereNull('parent_id')->count())->toBe(5);
+});
+
+it('seeds the five roots in the requested order idempotently and preserves legacy product assignments', function () {
     Storage::fake('public');
     $legacy = Category::create(['name' => 'Spices', 'slug' => 'spices']);
     $product = Product::create(['name' => 'Spice', 'slug' => 'spice', 'sku' => 'SP', 'category_id' => $legacy->id, 'base_price' => 10]);
     $this->seed(\Database\Seeders\CategorySeeder::class);
     $this->seed(\Database\Seeders\CategorySeeder::class);
-    expect(Category::whereNull('parent_id')->count())->toBe(4);
-    expect($legacy->fresh()->parent->slug)->toBe('groceries');
+    expect(Category::whereNull('parent_id')->orderBy('sorting_order')->pluck('name')->all())->toBe(['Groceries', 'Packed Food', 'Clothing', 'Electronics', 'Kitchen Utensils']);
+    expect($legacy->fresh()->parent->slug)->toBe('packed-food');
     expect($product->fresh()->category_id)->toBe($legacy->id);
     $food = Category::where('slug', 'groceries')->firstOrFail();
     expect($food->image)->toBeNull();
