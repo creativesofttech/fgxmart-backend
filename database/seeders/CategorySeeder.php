@@ -11,9 +11,10 @@ class CategorySeeder extends Seeder
 {
     public function run(): void
     {
+        $this->call(GroceriesCategorySeeder::class);
         DB::transaction(function () {
             $definitions = [
-                ['Packed Food', 'packed-food', 'FOOD', 'Pantry favourites, snacks & more'],
+                ['Groceries', 'groceries', 'FOOD', 'Everyday groceries, pantry staples, snacks & more'],
                 ['Clothing', 'clothing', 'CLT', 'Everyday style for everyone'],
                 ['Electronics', 'electronics', 'ELE', 'Smart finds for modern living'],
                 ['Kitchen Utensils', 'kitchen-utensils', 'KIT', 'Good things for your kitchen'],
@@ -34,7 +35,7 @@ class CategorySeeder extends Seeder
                     }
                 }
             }
-            $food = Category::where('slug', 'packed-food')->firstOrFail();
+            $food = Category::where('slug', 'groceries')->firstOrFail();
             Category::whereIn('slug', ['spices', 'dry-fruits', 'pulses', 'masalas'])
                 ->whereNull('parent_id')->update(['parent_id' => $food->id]);
         });

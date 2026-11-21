@@ -86,6 +86,23 @@ it('hides inactive categories and children while including child products in par
     $this->getJson('/api/v1/categories/audio')->assertNotFound();
 });
 
+it('renames packed food to groceries in place without changing images or product and child assignments', function () {
+    $root = Category::create(['name' => 'Packed Food', 'slug' => 'packed-food', 'image' => 'categories/uploaded.webp', 'status' => false]);
+    $child = Category::create(['name' => 'Snacks', 'slug' => 'snacks', 'parent_id' => $root->id]);
+    $product = Product::create(['name' => 'Snack', 'slug' => 'snack', 'sku' => 'GROC', 'category_id' => $root->id, 'base_price' => 10]);
+    $this->seed(\Database\Seeders\GroceriesCategorySeeder::class);
+    $this->seed(\Database\Seeders\GroceriesCategorySeeder::class);
+    expect($root->fresh()->name)->toBe('Groceries');
+    expect($root->fresh()->slug)->toBe('groceries');
+    expect($root->fresh()->short_description)->toBe('Everyday groceries, pantry staples, snacks & more');
+    expect($root->fresh()->image)->toBe('categories/uploaded.webp');
+    expect($root->fresh()->status)->toBeFalse();
+    expect($child->fresh()->parent_id)->toBe($root->id);
+    expect($product->fresh()->category_id)->toBe($root->id);
+    expect(Category::where('slug', 'packed-food')->exists())->toBeFalse();
+    expect(Category::where('slug', 'groceries')->count())->toBe(1);
+});
+
 it('seeds the four new roots idempotently and preserves legacy product assignments', function () {
     Storage::fake('public');
     $legacy = Category::create(['name' => 'Spices', 'slug' => 'spices']);
@@ -93,10 +110,10 @@ it('seeds the four new roots idempotently and preserves legacy product assignmen
     $this->seed(\Database\Seeders\CategorySeeder::class);
     $this->seed(\Database\Seeders\CategorySeeder::class);
     expect(Category::whereNull('parent_id')->count())->toBe(4);
-    expect($legacy->fresh()->parent->slug)->toBe('packed-food');
+    expect($legacy->fresh()->parent->slug)->toBe('groceries');
     expect($product->fresh()->category_id)->toBe($legacy->id);
-    $food = Category::where('slug', 'packed-food')->firstOrFail();
-    Storage::disk('public')->assertExists($food->image);
+    $food = Category::where('slug', 'groceries')->firstOrFail();
+    expect($food->image)->toBeNull();
     $food->update(['image' => null]);
     $this->seed(\Database\Seeders\CategorySeeder::class);
     expect($food->fresh()->image)->toBeNull();

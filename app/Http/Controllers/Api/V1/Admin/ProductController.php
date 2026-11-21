@@ -23,7 +23,7 @@ class ProductController extends Controller
     public function index(Request $request)
     {
         $query = Product::with(['category', 'brand', 'media', 'countries', 'attributeValues.attribute'])
-            ->withCount('publishedReviews as reviews_count')->withAvg('publishedReviews as rating_average', 'rating')->orderBy('created_at', 'desc');
+            ->withCount('publishedReviews as reviews_count')->withAvg('publishedReviews as rating_average', 'rating')->orderBy('created_at', 'desc')->orderBy('id', 'desc');
 
         if (!$request->is('api/v1/admin/*')) {
             $query->where('status', true);
@@ -50,12 +50,24 @@ class ProductController extends Controller
             }
         }
 
-        if ($request->has('search')) {
-            $search = $request->get('search');
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('sku', 'like', "%{$search}%");
-            });
+        if ($request->has('brand_id')) {
+            $request->validate(['brand_id' => ['required', 'integer', 'exists:brands,id']]);
+            $query->where('brand_id', $request->integer('brand_id'));
+            if (!$request->is('api/v1/admin/*')) {
+                $query->whereHas('brand', fn ($brand) => $brand->where('status', true));
+            }
+        }
+
+        if ($request->filled('search')) {
+            $public = !$request->is('api/v1/admin/*');
+            $request->validate(['search' => ['required', 'string', 'min:'.($public ? 3 : 1), 'max:100']]);
+            if ($public) {
+                $search = app(\App\Services\ProductSearch::class);
+                $search->apply($query, $search->matches($request->string('search')->toString()), !$request->filled('sort'));
+            } else {
+                $term = $request->string('search')->toString();
+                $query->where(fn ($q) => $q->where('name', 'like', "%{$term}%")->orWhere('sku', 'like', "%{$term}%"));
+            }
         }
 
         if ($request->has('category_ids')) {
@@ -104,13 +116,13 @@ class ProductController extends Controller
         if ($request->has('sort')) {
             switch ($request->sort) {
                 case 'price_asc':
-                    $query->orderByRaw('COALESCE(discount_price, base_price) ASC');
+                    $query->reorder()->orderByRaw('COALESCE(discount_price, base_price) ASC')->orderBy('id');
                     break;
                 case 'price_desc':
-                    $query->orderByRaw('COALESCE(discount_price, base_price) DESC');
+                    $query->reorder()->orderByRaw('COALESCE(discount_price, base_price) DESC')->orderBy('id');
                     break;
                 case 'name_asc':
-                    $query->orderBy('name', 'asc');
+                    $query->reorder()->orderBy('name', 'asc')->orderBy('id');
                     break;
             }
         }
@@ -223,6 +235,19 @@ class ProductController extends Controller
         return response()->json([
             'data' => $product->load(['category', 'brand', 'media', 'countries', 'attributeValues.attribute'])
         ]);
+    }
+
+    public function related(Product $product)
+    {
+        abort_unless($product->status, 404);
+        if (!$product->category_id) return response()->json(['data' => []]);
+
+        $products = Product::with(['category', 'brand', 'media', 'countries', 'attributeValues.attribute'])
+            ->withCount('publishedReviews as reviews_count')->withAvg('publishedReviews as rating_average', 'rating')
+            ->where('status', true)->where('category_id', $product->category_id)->whereKeyNot($product->id)
+            ->orderByDesc('created_at')->orderByDesc('id')->limit(4)->get();
+
+        return response()->json(['data' => $products]);
     }
 
     public function showBySlug($slug)

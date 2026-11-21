@@ -11,6 +11,7 @@ Route::prefix('v1')->group(function () {
     Route::post('/register', [AuthController::class , 'register'])->middleware('throttle:5,1');
 
     // Public Data Routes
+    Route::get('/search/suggestions', \App\Http\Controllers\Api\V1\SearchController::class)->middleware('throttle:120,1');
     Route::get('/brands', [\App\Http\Controllers\Api\V1\Admin\BrandController::class, 'index']);
     Route::get('/legal-pages/{page}', [\App\Http\Controllers\Api\V1\LegalPageController::class, 'show']);
     Route::get('/countries', [\App\Http\Controllers\Api\V1\Admin\CountryController::class , 'index']);
@@ -18,6 +19,7 @@ Route::prefix('v1')->group(function () {
     Route::get('/categories', [\App\Http\Controllers\Api\V1\Admin\CategoryController::class , 'index']);
     Route::get('/categories/{slug}', [\App\Http\Controllers\Api\V1\Admin\CategoryController::class , 'showBySlug']);
     Route::get('/products', [\App\Http\Controllers\Api\V1\Admin\ProductController::class , 'index']);
+    Route::get('/products/{product}/related', [\App\Http\Controllers\Api\V1\Admin\ProductController::class, 'related']);
     Route::get('/products/{product}', [\App\Http\Controllers\Api\V1\Admin\ProductController::class , 'showBySlug']);
     Route::get('/products/{product}/reviews', [\App\Http\Controllers\Api\V1\ProductReviewController::class, 'index']);
     Route::get('/company-info', [\App\Http\Controllers\Api\V1\CompanyInfoController::class , 'index']);
